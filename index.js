@@ -20,7 +20,7 @@ bot.start((ctx) => {
         users.push(userId);
         saveUsers();
     }
-    ctx.reply(`✅ Welcome! Your ID is ${userId}`);
+    ctx.reply(`✅ Welcome! our bot is working`);
 });
 
 // **Command: Broadcast message or media**
