@@ -2,7 +2,6 @@ require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
 
 const bot = new Telegraf('8172383815:AAG37FSq_wkyxb6qhNPpD4-SDG5XhmvOsIg'); // Securely load bot token from .env
 const adminId = 1626509050; // Replace with your Telegram ID
@@ -10,8 +9,14 @@ const adminId = 1626509050; // Replace with your Telegram ID
 const usersFile = 'users.json';
 let users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile)) : [];
 
+const premiumUsersFile = 'premiumUsers.json';
+let premiumUsers = fs.existsSync(premiumUsersFile) ? JSON.parse(fs.readFileSync(premiumUsersFile)) : [];
+
 // Function to save users
 const saveUsers = () => fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+
+// Function to save premium users
+const savePremiumUsers = () => fs.writeFileSync(premiumUsersFile, JSON.stringify(premiumUsers, null, 2));
 
 // **Command: Register users with /start**
 bot.start((ctx) => {
@@ -20,14 +25,56 @@ bot.start((ctx) => {
         users.push(userId);
         saveUsers();
     }
-    ctx.reply(`✅ Welcome! our bot is working`);
+    ctx.reply(`✅ Welcome! Our bot is working`);
+});
+
+// **Command: Add Premium User**
+bot.command('addpremium', (ctx) => {
+    if (ctx.from.id !== adminId) return ctx.reply('❌ Unauthorized!');
+
+    const args = ctx.message.text.split(' ');
+    if (args.length < 2) return ctx.reply('Usage: /addpremium <user_id>');
+
+    const userId = parseInt(args[1]);
+    if (!users.includes(userId)) return ctx.reply('❌ User not found!');
+
+    if (!premiumUsers.includes(userId)) {
+        premiumUsers.push(userId);
+        savePremiumUsers();
+        ctx.reply(`✅ User ${userId} has been added as a premium subscriber.`);
+    } else {
+        ctx.reply(`⚠️ User ${userId} is already a premium subscriber.`);
+    }
+});
+
+// **Command: Remove Premium User**
+bot.command('removepremium', (ctx) => {
+    if (ctx.from.id !== adminId) return ctx.reply('❌ Unauthorized!');
+
+    const args = ctx.message.text.split(' ');
+    if (args.length < 2) return ctx.reply('Usage: /removepremium <user_id>');
+
+    const userId = parseInt(args[1]);
+    if (!premiumUsers.includes(userId)) return ctx.reply('❌ User is not a premium subscriber.');
+
+    premiumUsers = premiumUsers.filter(id => id !== userId);
+    savePremiumUsers();
+    ctx.reply(`✅ User ${userId} has been removed from premium subscription.`);
+});
+
+// **Command: Check Premium Status**
+bot.command('checkpremium', (ctx) => {
+    const userId = ctx.from.id;
+    if (premiumUsers.includes(userId)) {
+        ctx.reply(`✅ You are a premium subscriber.`);
+    } else {
+        ctx.reply(`❌ You are not a premium subscriber. Subscribe to access premium features.`);
+    }
 });
 
 // **Command: Broadcast message or media**
 bot.command('broadcast', async (ctx) => {
-    if (ctx.from.id !== adminId) {
-        return ctx.reply('Unauthorized!');
-    }
+    if (ctx.from.id !== adminId) return ctx.reply('Unauthorized!');
 
     const message = ctx.message.text.split(' ').slice(1).join(' ');
     if (!message) return ctx.reply('Usage: /broadcast Your message here');
@@ -46,12 +93,6 @@ bot.command('broadcast', async (ctx) => {
     ctx.reply(`✅ Broadcast completed: Sent to ${success} users, Failed: ${failed}.`);
 });
 
-// **Ensure video directory exists**
-const videoDir = path.join(__dirname, 'videos');
-if (!fs.existsSync(videoDir)) {
-    fs.mkdirSync(videoDir);
-}
-
 // **Load videos list**
 let videosList = [];
 const videosFilePath = path.join(__dirname, 'videos.json');
@@ -68,30 +109,7 @@ const updateVideosFile = () => {
     fs.writeFileSync(videosFilePath, JSON.stringify(videosList, null, 2));
 };
 
-// **Function to download and save files**
-async function downloadFile(fileId, savePath) {
-    try {
-        const fileUrl = (await bot.telegram.getFileLink(fileId)).href; // Correctly get file URL
-        const response = await axios({
-            url: fileUrl,
-            method: 'GET',
-            responseType: 'stream',
-        });
-
-        return new Promise((resolve, reject) => {
-            const writer = fs.createWriteStream(savePath);
-            response.data.pipe(writer);
-
-            writer.on('finish', resolve);
-            writer.on('error', reject);
-        });
-    } catch (error) {
-        console.error("Error downloading file:", error);
-        throw new Error("File download failed.");
-    }
-}
-
-// **Handle Video Uploads**
+// **Handle Video Uploads (Stores Only File ID)**
 bot.on('message', async (ctx) => {
     if (ctx.from.id !== adminId) return; // Only admin can upload videos
 
@@ -107,15 +125,28 @@ bot.on('message', async (ctx) => {
     }
 
     try {
-        const newFilePath = path.join(videoDir, fileName);
-        await downloadFile(fileId, newFilePath); // Correctly download file
-
-        videosList.push({ fileName, filePath: newFilePath, uploadedAt: new Date().toISOString() });
+        videosList.push({ fileName, fileId, uploadedAt: new Date().toISOString() });
         updateVideosFile();
 
-        ctx.reply(`✅ Video uploaded and saved as ${fileName}.`);
+        ctx.reply(`✅ Video received and stored. File ID: \`${fileId}\``);
     } catch (error) {
-        ctx.reply("❌ Failed to upload video.");
+        ctx.reply("❌ Failed to save video.");
+    }
+});
+
+// **Command: Get Premium Videos**
+bot.command('getvideos', (ctx) => {
+    const userId = ctx.from.id;
+    if (!premiumUsers.includes(userId)) {
+        return ctx.reply('❌ You must be a premium subscriber to access videos.');
+    }
+
+    if (videosList.length === 0) {
+        return ctx.reply('📂 No videos available.');
+    }
+
+    for (const video of videosList) {
+        bot.telegram.sendVideo(userId, video.fileId, { caption: `🎬 ${video.fileName}` });
     }
 });
 
