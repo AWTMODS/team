@@ -242,16 +242,28 @@ bot.action('upgrade_to_premium', async (ctx) => {
 bot.on('photo', async (ctx) => {
     const userId = ctx.from.id;
 
-    // Forward payment proof to admin group
     try {
+        // Get the highest resolution photo file ID
         const photoFileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+
+        // Log the photo file ID for debugging
+        console.log(`Received payment proof from user ${userId}. File ID: ${photoFileId}`);
+
+        // Log the admin group ID for debugging
+        console.log(`Admin group ID: ${adminGroupId}`);
+
+        // Forward payment proof to admin group
         await bot.telegram.sendPhoto(adminGroupId, photoFileId, {
             caption: `Payment proof from user: ${ctx.from.username || ctx.from.first_name} (ID: ${userId})`,
         });
-        ctx.reply('✅ Payment proof received. Please wait for your payment confirmation.');
+
+        // Send confirmation message to the user
+        await ctx.reply('✅ Payment proof received. Please wait for your payment confirmation.');
     } catch (error) {
         console.error('Failed to forward payment proof:', error);
-        ctx.reply('❌ Failed to process payment proof. Please try again later.');
+
+        // Notify the user if something went wrong
+        await ctx.reply('❌ Failed to process payment proof. Please try again later.');
     }
 });
 
