@@ -14,14 +14,7 @@ let users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile)) : 
 // Save users to JSON
 const saveUsers = () => fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
 
-// Capture new users
-bot.start((ctx) => {
-  if (!users.includes(ctx.chat.id)) {
-    users.push(ctx.chat.id);
-    saveUsers();
-  }
-  ctx.reply('Welcome! You are now subscribed to broadcasts.');
-});
+
 
 // Admin command to broadcast a message
 bot.command('broadcast', (ctx) => {
