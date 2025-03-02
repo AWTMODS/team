@@ -12,11 +12,32 @@ let users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile)) : 
 const premiumUsersFile = 'premiumUsers.json';
 let premiumUsers = fs.existsSync(premiumUsersFile) ? JSON.parse(fs.readFileSync(premiumUsersFile)) : [];
 
+// Track daily video requests for each user
+const dailyVideoRequestsFile = 'dailyVideoRequests.json';
+let dailyVideoRequests = fs.existsSync(dailyVideoRequestsFile) ? JSON.parse(fs.readFileSync(dailyVideoRequestsFile)) : {};
+
 // Function to save users
 const saveUsers = () => fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
 
 // Function to save premium users
 const savePremiumUsers = () => fs.writeFileSync(premiumUsersFile, JSON.stringify(premiumUsers, null, 2));
+
+// Function to save daily video requests
+const saveDailyVideoRequests = () => fs.writeFileSync(dailyVideoRequestsFile, JSON.stringify(dailyVideoRequests, null, 2));
+
+// Reset daily video requests at midnight
+const resetDailyVideoRequests = () => {
+    dailyVideoRequests = {};
+    saveDailyVideoRequests();
+};
+
+// Schedule reset at midnight
+const schedule = require('node-schedule');
+const rule = new schedule.RecurrenceRule();
+rule.hour = 0;
+rule.minute = 0;
+rule.second = 0;
+schedule.scheduleJob(rule, resetDailyVideoRequests);
 
 // **Command: Register users with /start**
 bot.start((ctx) => {
@@ -136,36 +157,50 @@ bot.on('message', async (ctx) => {
     }
 });
 
-// **Command: Get Premium Videos**
-bot.command('getvideos', (ctx) => {
+// **Handle Inline Button Callback**
+bot.action('get_videos', async (ctx) => {
     const userId = ctx.from.id;
-    if (!premiumUsers.includes(userId)) {
-        return ctx.reply('❌ You must be a premium subscriber to access videos.');
+
+    // Check if user is premium
+    if (premiumUsers.includes(userId)) {
+        // Premium users get unlimited videos
+        for (const video of videosList) {
+            await ctx.replyWithVideo(video.fileId, { caption: `🎬 ${video.fileName}` });
+        }
+        return;
     }
 
-    if (videosList.length === 0) {
-        return ctx.reply('📂 No videos available.');
+    // Non-premium users have a daily limit
+    if (!dailyVideoRequests[userId]) {
+        dailyVideoRequests[userId] = 0;
     }
 
-    for (const video of videosList) {
-        bot.telegram.sendVideo(userId, video.fileId, { caption: `🎬 ${video.fileName}` });
+    if (dailyVideoRequests[userId] >= 5) {
+        return ctx.reply('❌ You have reached your daily limit of 5 videos. Upgrade to premium for unlimited access.', Markup.inlineKeyboard([
+            Markup.button.callback('Upgrade to Premium', 'upgrade_to_premium')
+        ]));
+    }
+
+    // Send videos up to the limit
+    const videosToSend = videosList.slice(0, 5 - dailyVideoRequests[userId]);
+    for (const video of videosToSend) {
+        await ctx.replyWithVideo(video.fileId, { caption: `🎬 ${video.fileName}` });
+    }
+
+    // Update daily video requests
+    dailyVideoRequests[userId] += videosToSend.length;
+    saveDailyVideoRequests();
+
+    if (dailyVideoRequests[userId] >= 5) {
+        ctx.reply('⚠️ You have reached your daily limit of 5 videos. Upgrade to premium for unlimited access.', Markup.inlineKeyboard([
+            Markup.button.callback('Upgrade to Premium', 'upgrade_to_premium')
+        ]));
     }
 });
 
-// **Handle Inline Button Callback**
-bot.action('get_videos', (ctx) => {
-    const userId = ctx.from.id;
-    if (!premiumUsers.includes(userId)) {
-        return ctx.reply('❌ You must be a premium subscriber to access videos.');
-    }
-
-    if (videosList.length === 0) {
-        return ctx.reply('📂 No videos available.');
-    }
-
-    for (const video of videosList) {
-        bot.telegram.sendVideo(userId, video.fileId, { caption: `🎬 ${video.fileName}` });
-    }
+// **Handle Upgrade to Premium Button**
+bot.action('upgrade_to_premium', (ctx) => {
+    ctx.reply('To upgrade to premium, please contact the admin.');
 });
 
 // **Start bot**
