@@ -248,7 +248,7 @@ bot.on('photo', async (ctx) => {
         await bot.telegram.sendPhoto(adminGroupId, photoFileId, {
             caption: `Payment proof from user: ${ctx.from.username || ctx.from.first_name} (ID: ${userId})`,
         });
-        ctx.reply('✅ Payment proof received. Our team will verify and upgrade your account shortly.');
+        ctx.reply('✅ Payment proof received. Please wait for your payment confirmation.');
     } catch (error) {
         console.error('Failed to forward payment proof:', error);
         ctx.reply('❌ Failed to process payment proof. Please try again later.');
