@@ -6,6 +6,7 @@ const schedule = require('node-schedule');
 
 const bot = new Telegraf('8172383815:AAG37FSq_wkyxb6qhNPpD4-SDG5XhmvOsIg'); // Securely load bot token from .env
 const adminId = 1626509050; // Replace with your Telegram ID
+const adminGroupId = -4602723399; // Replace with your admin group/channel ID
 
 const usersFile = 'users.json';
 let users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile)) : [];
@@ -223,8 +224,35 @@ bot.action('get_videos', async (ctx) => {
 });
 
 // **Handle Upgrade to Premium Button**
-bot.action('upgrade_to_premium', (ctx) => {
-    ctx.reply('To upgrade to premium, please contact the admin.');
+bot.action('upgrade_to_premium', async (ctx) => {
+    const userId = ctx.from.id;
+
+    // Send UPI QR code image
+    try {
+        await ctx.replyWithPhoto({ source: './upi_qr_code.jpg' }, {
+            caption: '📲 Scan the QR code to make the payment. After payment, send the payment proof (screenshot) here.',
+        });
+    } catch (error) {
+        console.error('Failed to send UPI QR code:', error);
+        ctx.reply('❌ Failed to send UPI QR code. Please try again later.');
+    }
+});
+
+// **Handle Payment Proof**
+bot.on('photo', async (ctx) => {
+    const userId = ctx.from.id;
+
+    // Forward payment proof to admin group
+    try {
+        const photoFileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+        await bot.telegram.sendPhoto(adminGroupId, photoFileId, {
+            caption: `Payment proof from user: ${ctx.from.username || ctx.from.first_name} (ID: ${userId})`,
+        });
+        ctx.reply('✅ Payment proof received. Our team will verify and upgrade your account shortly.');
+    } catch (error) {
+        console.error('Failed to forward payment proof:', error);
+        ctx.reply('❌ Failed to process payment proof. Please try again later.');
+    }
 });
 
 // **Start bot**
