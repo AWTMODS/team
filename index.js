@@ -14,29 +14,49 @@ let users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile)) : 
 // Save users to JSON
 const saveUsers = () => fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
 
-
-
-// Admin command to broadcast a message
-bot.command('broadcast', (ctx) => {
+// Admin command to broadcast a message or media
+bot.command('broadcast', async (ctx) => {
   const adminId = YOUR_ADMIN_USER_ID; // Replace with your Telegram ID
 
   if (ctx.chat.id !== adminId) {
     return ctx.reply('Unauthorized!');
   }
 
-  const message = ctx.message.text.split(' ').slice(1).join(' ');
+  if (ctx.message.text) {
+    const message = ctx.message.text.split(' ').slice(1).join(' ');
 
-  if (!message) return ctx.reply('Usage: /broadcast Your message here');
+    if (!message) return ctx.reply('Usage: /broadcast Your message here');
 
-  let success = 0, failed = 0;
+    let success = 0, failed = 0;
 
-  users.forEach((userId) => {
-    bot.telegram.sendMessage(userId, message)
-      .then(() => success++)
-      .catch(() => failed++);
-  });
+    users.forEach((userId) => {
+      bot.telegram.sendMessage(userId, message)
+        .then(() => success++)
+        .catch(() => failed++);
+    });
 
-  ctx.reply(`Broadcast started: Sending to ${users.length} users.`);
+    ctx.reply(`Broadcast started: Sending to ${users.length} users.`);
+  }
+
+  // Broadcast media (photo, video, document, audio)
+  const mediaType = ['photo', 'video', 'document', 'audio'];
+
+  for (const type of mediaType) {
+    if (ctx.message[type]) {
+      let success = 0, failed = 0;
+      users.forEach((userId) => {
+        bot.telegram.sendChatAction(userId, 'upload_document');
+        bot.telegram.sendMediaGroup(userId, [
+          {
+            type: type,
+            media: ctx.message[type][0].file_id,
+            caption: ctx.message.caption || ''
+          }
+        ]).then(() => success++).catch(() => failed++);
+      });
+      return ctx.reply(`Broadcasting ${type}: Sending to ${users.length} users.`);
+    }
+  }
 });
 
 // Start the bot
@@ -47,4 +67,3 @@ console.log('Bot is running...');
 // Graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
