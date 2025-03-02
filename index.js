@@ -59,6 +59,81 @@ bot.command('broadcast', async (ctx) => {
   }
 });
 
+
+
+
+// Directory to save videos
+const videoDir = path.join(__dirname, 'videos');
+if (!fs.existsSync(videoDir)) {
+  fs.mkdirSync(videoDir);
+}
+
+// Load existing videos from videos.js if it exists
+let videosList = [];
+const videosFilePath = path.join(__dirname, 'videos.js');
+if (fs.existsSync(videosFilePath)) {
+  try {
+    videosList = require(videosFilePath).videos;
+  } catch (err) {
+    console.error("Error loading videos.js:", err);
+  }
+}
+
+// Function to update the videos.js file
+function updateVideosFile() {
+  const fileContent = module.exports = {\n  videos: ${JSON.stringify(videosList, null, 2)}\n};\n;
+  fs.writeFileSync(videosFilePath, fileContent);
+}
+
+// Listen for any message
+bot.on('message', async (msg) => {
+  // Allow only the admin to upload videos
+  if (msg.from.id !== adminId) {
+    return;
+  }
+
+  let fileId;
+  let fileName;
+
+  // Check if the message contains a video or a document with a video MIME type
+  if (msg.video) {
+    fileId = msg.video.file_id;
+    // Use the file_name if provided or generate a default name
+    fileName = msg.video.file_name || video_${Date.now()}.mp4;
+  } else if (msg.document) {
+    if (msg.document.mime_type && msg.document.mime_type.startsWith('video/')) {
+      fileId = msg.document.file_id;
+      fileName = msg.document.file_name || video_${Date.now()};
+    } else {
+      bot.sendMessage(adminId, "The document is not recognized as a video.");
+      return;
+    }
+  } else {
+    return; // Not a video or valid document
+  }
+
+  try {
+    // Download the file to the videoDir folder (bot.downloadFile returns the local path)
+    const tempFilePath = await bot.downloadFile(fileId, videoDir);
+    
+    // Define the final destination path using the provided or generated fileName
+    const newFilePath = path.join(videoDir, fileName);
+    fs.renameSync(tempFilePath, newFilePath);
+
+    // Store video details in the list
+    videosList.push({
+      fileName,
+      filePath: newFilePath,
+      uploadedAt: new Date()
+    });
+    updateVideosFile();
+
+    bot.sendMessage(adminId, `Video uploaded and saved as ${fileName}`);
+  } catch (error) {
+    console.error("Error downloading or saving file:", error);
+    bot.sendMessage(adminId, "Failed to upload video.");
+  }
+});
 // Start the bot
 bot.launch();
 
