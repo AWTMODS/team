@@ -3,7 +3,7 @@
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
 
-const bot = new Telegraf('YOUR_BOT_API_TOKEN');
+const bot = new Telegraf('8172383815:AAG37FSq_wkyxb6qhNPpD4-SDG5XhmvOsIg');
 
 // Store user IDs
 const usersFile = 'users.json';
@@ -16,7 +16,7 @@ const saveUsers = () => fs.writeFileSync(usersFile, JSON.stringify(users, null, 
 
 // Admin command to broadcast a message or media
 bot.command('broadcast', async (ctx) => {
-  const adminId = YOUR_ADMIN_USER_ID; // Replace with your Telegram ID
+  const adminId = 1626509050; // Replace with your Telegram ID
 
   if (ctx.chat.id !== adminId) {
     return ctx.reply('Unauthorized!');
@@ -30,7 +30,7 @@ bot.command('broadcast', async (ctx) => {
     let success = 0, failed = 0;
 
     users.forEach((userId) => {
-      bot.telegram.sendMessage(userId, message)
+      bot.telegram.sendMessage(userId, `${message}\n\n📌 Your ID: ${userId}`)
         .then(() => success++)
         .catch(() => failed++);
     });
@@ -50,7 +50,7 @@ bot.command('broadcast', async (ctx) => {
           {
             type: type,
             media: ctx.message[type][0].file_id,
-            caption: ctx.message.caption || ''
+            caption: `${ctx.message.caption || ''}\n\n📌 Your ID: ${userId}`
           }
         ]).then(() => success++).catch(() => failed++);
       });
