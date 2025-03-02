@@ -2,6 +2,7 @@ require('dotenv').config();
 const { Telegraf, Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
+const schedule = require('node-schedule');
 
 const bot = new Telegraf('8172383815:AAG37FSq_wkyxb6qhNPpD4-SDG5XhmvOsIg'); // Securely load bot token from .env
 const adminId = 1626509050; // Replace with your Telegram ID
@@ -32,7 +33,6 @@ const resetDailyVideoRequests = () => {
 };
 
 // Schedule reset at midnight
-const schedule = require('node-schedule');
 const rule = new schedule.RecurrenceRule();
 rule.hour = 0;
 rule.minute = 0;
@@ -164,8 +164,20 @@ bot.action('get_videos', async (ctx) => {
     // Check if user is premium
     if (premiumUsers.includes(userId)) {
         // Premium users get unlimited videos
+        if (videosList.length === 0) {
+            return ctx.reply('📂 No videos available.');
+        }
+
         for (const video of videosList) {
-            await ctx.replyWithVideo(video.fileId, { caption: `🎬 ${video.fileName}` });
+            if (!video.fileId) {
+                console.error(`Invalid fileId for video: ${video.fileName}`);
+                continue;
+            }
+            try {
+                await ctx.replyWithVideo(video.fileId, { caption: `🎬 ${video.fileName}` });
+            } catch (error) {
+                console.error(`Failed to send video ${video.fileName}:`, error);
+            }
         }
         return;
     }
@@ -183,8 +195,20 @@ bot.action('get_videos', async (ctx) => {
 
     // Send videos up to the limit
     const videosToSend = videosList.slice(0, 5 - dailyVideoRequests[userId]);
+    if (videosToSend.length === 0) {
+        return ctx.reply('📂 No videos available.');
+    }
+
     for (const video of videosToSend) {
-        await ctx.replyWithVideo(video.fileId, { caption: `🎬 ${video.fileName}` });
+        if (!video.fileId) {
+            console.error(`Invalid fileId for video: ${video.fileName}`);
+            continue;
+        }
+        try {
+            await ctx.replyWithVideo(video.fileId, { caption: `🎬 ${video.fileName}` });
+        } catch (error) {
+            console.error(`Failed to send video ${video.fileName}:`, error);
+        }
     }
 
     // Update daily video requests
