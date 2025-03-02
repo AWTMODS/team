@@ -6,7 +6,7 @@ const schedule = require('node-schedule');
 
 const bot = new Telegraf('8172383815:AAG37FSq_wkyxb6qhNPpD4-SDG5XhmvOsIg'); // Securely load bot token from .env
 const adminId = 1626509050; // Replace with your Telegram ID
-const adminGroupId = -4602723399; // Replace with your admin group/channel ID
+const adminGroupId = -866101806; // Replace with your admin group/channel ID
 
 const usersFile = 'users.json';
 let users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile)) : [];
