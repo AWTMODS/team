@@ -1,144 +1,128 @@
-//broadcast feature
-// Import required modules
+require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
+const path = require('path');
+const axios = require('axios');
 
-const bot = new Telegraf('8172383815:AAG37FSq_wkyxb6qhNPpD4-SDG5XhmvOsIg');
+const bot = new Telegraf('8172383815:AAG37FSq_wkyxb6qhNPpD4-SDG5XhmvOsIg'); // Securely load bot token from .env
+const adminId = 1626509050; // Replace with your Telegram ID
 
-// Store user IDs
 const usersFile = 'users.json';
-
-// Load existing users or initialize empty array
 let users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile)) : [];
 
-// Save users to JSON
+// Function to save users
 const saveUsers = () => fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
 
-// Admin command to broadcast a message or media
+// **Command: Register users with /start**
+bot.start((ctx) => {
+    const userId = ctx.from.id;
+    if (!users.includes(userId)) {
+        users.push(userId);
+        saveUsers();
+    }
+    ctx.reply(`✅ Welcome! Your ID is ${userId}`);
+});
+
+// **Command: Broadcast message or media**
 bot.command('broadcast', async (ctx) => {
-  const adminId = 1626509050; // Replace with your Telegram ID
+    if (ctx.from.id !== adminId) {
+        return ctx.reply('Unauthorized!');
+    }
 
-  if (ctx.chat.id !== adminId) {
-    return ctx.reply('Unauthorized!');
-  }
-
-  if (ctx.message.text) {
     const message = ctx.message.text.split(' ').slice(1).join(' ');
-
     if (!message) return ctx.reply('Usage: /broadcast Your message here');
 
     let success = 0, failed = 0;
 
-    users.forEach((userId) => {
-      bot.telegram.sendMessage(userId, `${message}\n\n📌 Your ID: ${userId}`)
-        .then(() => success++)
-        .catch(() => failed++);
-    });
-
-    ctx.reply(`Broadcast started: Sending to ${users.length} users.`);
-  }
-
-  // Broadcast media (photo, video, document, audio)
-  const mediaType = ['photo', 'video', 'document', 'audio'];
-
-  for (const type of mediaType) {
-    if (ctx.message[type]) {
-      let success = 0, failed = 0;
-      users.forEach((userId) => {
-        bot.telegram.sendChatAction(userId, 'upload_document');
-        bot.telegram.sendMediaGroup(userId, [
-          {
-            type: type,
-            media: ctx.message[type][0].file_id,
-            caption: `${ctx.message.caption || ''}\n\n📌 Your ID: ${userId}`
-          }
-        ]).then(() => success++).catch(() => failed++);
-      });
-      return ctx.reply(`Broadcasting ${type}: Sending to ${users.length} users.`);
+    for (const userId of users) {
+        try {
+            await bot.telegram.sendMessage(userId, `${message}\n\n📌 Your ID: ${userId}`);
+            success++;
+        } catch (error) {
+            failed++;
+        }
     }
-  }
+
+    ctx.reply(`✅ Broadcast completed: Sent to ${success} users, Failed: ${failed}.`);
 });
 
-
-
-
-// Directory to save videos
+// **Ensure video directory exists**
 const videoDir = path.join(__dirname, 'videos');
 if (!fs.existsSync(videoDir)) {
-  fs.mkdirSync(videoDir);
+    fs.mkdirSync(videoDir);
 }
 
-// Load existing videos from videos.js if it exists
+// **Load videos list**
 let videosList = [];
-const videosFilePath = path.join(__dirname, 'videos.js');
+const videosFilePath = path.join(__dirname, 'videos.json');
 if (fs.existsSync(videosFilePath)) {
-  try {
-    videosList = require(videosFilePath).videos;
-  } catch (err) {
-    console.error("Error loading videos.js:", err);
-  }
-}
-
-// Function to update the videos.js file
-function updateVideosFile() {
-  const fileContent = module.exports = {\n  videos: ${JSON.stringify(videosList, null, 2)}\n};\n;
-  fs.writeFileSync(videosFilePath, fileContent);
-}
-
-// Listen for any message
-bot.on('message', async (msg) => {
-  // Allow only the admin to upload videos
-  if (msg.from.id !== adminId) {
-    return;
-  }
-
-  let fileId;
-  let fileName;
-
-  // Check if the message contains a video or a document with a video MIME type
-  if (msg.video) {
-    fileId = msg.video.file_id;
-    // Use the file_name if provided or generate a default name
-    fileName = msg.video.file_name || video_${Date.now()}.mp4;
-  } else if (msg.document) {
-    if (msg.document.mime_type && msg.document.mime_type.startsWith('video/')) {
-      fileId = msg.document.file_id;
-      fileName = msg.document.file_name || video_${Date.now()};
-    } else {
-      bot.sendMessage(adminId, "The document is not recognized as a video.");
-      return;
+    try {
+        videosList = JSON.parse(fs.readFileSync(videosFilePath));
+    } catch (err) {
+        console.error("Error loading videos.json:", err);
     }
-  } else {
-    return; // Not a video or valid document
-  }
+}
 
-  try {
-    // Download the file to the videoDir folder (bot.downloadFile returns the local path)
-    const tempFilePath = await bot.downloadFile(fileId, videoDir);
-    
-    // Define the final destination path using the provided or generated fileName
-    const newFilePath = path.join(videoDir, fileName);
-    fs.renameSync(tempFilePath, newFilePath);
+// **Function to update videos.json**
+const updateVideosFile = () => {
+    fs.writeFileSync(videosFilePath, JSON.stringify(videosList, null, 2));
+};
 
-    // Store video details in the list
-    videosList.push({
-      fileName,
-      filePath: newFilePath,
-      uploadedAt: new Date()
-    });
-    updateVideosFile();
+// **Function to download and save files**
+async function downloadFile(fileId, savePath) {
+    try {
+        const fileUrl = (await bot.telegram.getFileLink(fileId)).href; // Correctly get file URL
+        const response = await axios({
+            url: fileUrl,
+            method: 'GET',
+            responseType: 'stream',
+        });
 
-    bot.sendMessage(adminId, `Video uploaded and saved as ${fileName}`);
-  } catch (error) {
-    console.error("Error downloading or saving file:", error);
-    bot.sendMessage(adminId, "Failed to upload video.");
-  }
+        return new Promise((resolve, reject) => {
+            const writer = fs.createWriteStream(savePath);
+            response.data.pipe(writer);
+
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+        });
+    } catch (error) {
+        console.error("Error downloading file:", error);
+        throw new Error("File download failed.");
+    }
+}
+
+// **Handle Video Uploads**
+bot.on('message', async (ctx) => {
+    if (ctx.from.id !== adminId) return; // Only admin can upload videos
+
+    let fileId, fileName;
+    if (ctx.message.video) {
+        fileId = ctx.message.video.file_id;
+        fileName = ctx.message.video.file_name || `video_${Date.now()}.mp4`;
+    } else if (ctx.message.document && ctx.message.document.mime_type.startsWith('video/')) {
+        fileId = ctx.message.document.file_id;
+        fileName = ctx.message.document.file_name || `video_${Date.now()}`;
+    } else {
+        return; // Not a video, ignore
+    }
+
+    try {
+        const newFilePath = path.join(videoDir, fileName);
+        await downloadFile(fileId, newFilePath); // Correctly download file
+
+        videosList.push({ fileName, filePath: newFilePath, uploadedAt: new Date().toISOString() });
+        updateVideosFile();
+
+        ctx.reply(`✅ Video uploaded and saved as ${fileName}.`);
+    } catch (error) {
+        ctx.reply("❌ Failed to upload video.");
+    }
 });
-// Start the bot
+
+// **Start bot**
 bot.launch();
+console.log('🚀 Bot is running...');
 
-console.log('Bot is running...');
-
-// Graceful stop
+// **Graceful shutdown**
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
