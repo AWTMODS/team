@@ -3,6 +3,7 @@ const { Telegraf, Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 const schedule = require('node-schedule');
+const QRCode = require('qrcode'); // Add this package to generate QR codes
 
 // Initialize bot
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -142,6 +143,25 @@ bot.action('get_videos', async (ctx) => {
 
     dailyVideoRequests[userId] = (dailyVideoRequests[userId] || 0) + videosToSend.length;
     saveData(dailyVideoRequestsFile, dailyVideoRequests);
+});
+
+// Handle Purchase Premium Button
+bot.action('purchase_premium', async (ctx) => {
+    const userId = ctx.from.id;
+
+    // Generate a QR code (for example, a payment link)
+    const paymentLink = 'https://your-payment-link.com'; // Replace with your actual payment link
+    const qrCodePath = path.join(__dirname, 'qr.png');
+
+    QRCode.toFile(qrCodePath, paymentLink, { type: 'png' }, async (err) => {
+        if (err) {
+            console.error('Error generating QR code:', err);
+            return ctx.reply('❌ Failed to generate QR code. Please try again later.');
+        }
+
+        // Send the QR code to the user
+        await ctx.replyWithPhoto({ source: qrCodePath }, { caption: 'Scan this QR code to complete your premium purchase.' });
+    });
 });
 
 // Start bot
