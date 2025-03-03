@@ -47,6 +47,21 @@ bot.start((ctx) => {
 // Admin check utility
 const isAdmin = (id) => id === adminId;
 
+// Handle Purchase Premium Button
+bot.action('purchase_premium', async (ctx) => {
+    const paymentLink = 'https://your-payment-link.com'; // Replace with your actual payment link
+
+    QRCode.toBuffer(paymentLink, async (err, buffer) => {
+        if (err) {
+            console.error('Error generating QR code:', err);
+            return ctx.reply('❌ Failed to generate QR code. Please try again later.');
+        }
+
+        await ctx.replyWithPhoto({ source: buffer }, { caption: 'Scan this QR code to complete your premium purchase.' });
+    });
+});
+
+
 // Add Premium User
 bot.command('addpremium', (ctx) => {
     if (!isAdmin(ctx.from.id)) return ctx.reply('❌ Unauthorized!');
