@@ -6,7 +6,7 @@ const schedule = require('node-schedule');
 
 const bot = new Telegraf('8172383815:AAG37FSq_wkyxb6qhNPpD4-SDG5XhmvOsIg'); // Securely load bot token from .env
 const adminId = 1626509050; // Replace with your Telegram ID
-const adminGroupId = -1002471429799; // Replace with your admin group ID (regular group)
+const adminGroupId = -1002471429799; // Replace with your admin group ID (supergroup)
 
 const usersFile = 'users.json';
 let users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile)) : [];
@@ -48,7 +48,8 @@ bot.start((ctx) => {
         saveUsers();
     }
     ctx.reply('✅ Welcome! Our bot is working', Markup.inlineKeyboard([
-        Markup.button.callback('Get Videos', 'get_videos')
+        Markup.button.callback('Get Videos', 'get_videos'),
+        Markup.button.callback('Purchase Premium', 'purchase_premium') // Add "Purchase Premium" button
     ]));
 });
 
@@ -243,7 +244,7 @@ bot.action('purchase_premium', async (ctx) => {
                 const user = ctx.from;
                 const adminMessage = `💳 *Payment Proof Received*\n👤 *Name:* ${user.first_name}\n🆔 *User ID:* ${user.id}\n👥 *Username:* @${user.username || 'N/A'}\n🔗 [Open Profile](https://t.me/${user.username || user.id})`;
 
-                await bot.telegram.sendPhoto(ADMIN_GROUP_ID, proof, {
+                await bot.telegram.sendPhoto(adminGroupId, proof, {
                     caption: adminMessage,
                     parse_mode: 'Markdown',
                     reply_markup: {
