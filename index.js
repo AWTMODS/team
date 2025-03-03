@@ -223,47 +223,67 @@ bot.action('get_videos', async (ctx) => {
     }
 });
 
-// **Handle Upgrade to Premium Button**
-bot.action('upgrade_to_premium', async (ctx) => {
+// Handle "Purchase Premium" button
+bot.action('purchase_premium', async (ctx) => {
     const userId = ctx.from.id;
 
-    // Send UPI QR code image
-    try {
-        await ctx.replyWithPhoto({ source: './upi_qr_code.jpg' }, {
-            caption: '📲 Scan the QR code to make the payment. After payment, send the payment proof (screenshot) here.',
-        });
-    } catch (error) {
-        console.error('Failed to send UPI QR code:', error);
-        ctx.reply('❌ Failed to send UPI QR code. Please try again later.');
-    }
+    console.log(`[INFO] User ${userId} clicked "Purchase Premium"`);
+
+    // Send QR code image from server
+    await ctx.replyWithPhoto({ source: './qr_code.jpg' }, {
+        caption: 'Please send the payment proof after completing the payment.',
+    });
+
+    const paymentProofHandler = async (ctx) => {
+        try {
+            if (ctx.from.id === userId && ctx.message.photo) {
+                const proof = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+                console.log('[INFO] Payment proof file ID:', proof);
+
+                const user = ctx.from;
+                const adminMessage = `💳 *Payment Proof Received*\n👤 *Name:* ${user.first_name}\n🆔 *User ID:* ${user.id}\n👥 *Username:* @${user.username || 'N/A'}\n🔗 [Open Profile](https://t.me/${user.username || user.id})`;
+
+                await bot.telegram.sendPhoto(ADMIN_GROUP_ID, proof, {
+                    caption: adminMessage,
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [[{ text: 'Verify', callback_data: `verify_${userId}` }]],
+                    },
+                });
+
+                console.log('[SUCCESS] Payment proof sent to admin group');
+                await ctx.reply('Payment proof received. Admins will verify it shortly.');
+
+                bot.off('message', paymentProofHandler);
+            }
+        } catch (err) {
+            console.error('[ERROR] Failed to process payment proof:', err);
+            await ctx.reply('There was an error processing your payment proof. Please try again later.');
+        }
+    };
+
+    bot.on('message', paymentProofHandler);
+
+    setTimeout(() => {
+        console.log('[INFO] Payment proof listener timed out');
+        bot.off('message', paymentProofHandler);
+        ctx.reply('Payment proof submission timed out. Please try again if needed.');
+    }, 300000); // 5 minutes timeout
 });
 
-// **Handle Payment Proof**
-bot.on('photo', async (ctx) => {
-    const userId = ctx.from.id;
+// Handle "Verify" button in admin group
+bot.action(/verify_(\d+)/, async (ctx) => {
+    const userId = parseInt(ctx.match[1], 10);
+    const user = users.find((u) => u.id === userId);
 
-    try {
-        // Get the highest resolution photo file ID
-        const photoFileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+    if (user) {
+        user.premium = true;
+        saveUsers();
 
-        // Log the photo file ID for debugging
-        console.log(`Received payment proof from user ${userId}. File ID: ${photoFileId}`);
-
-        // Log the admin group ID for debugging
-        console.log(`Admin group ID: ${adminGroupId}`);
-
-        // Forward payment proof to admin group
-        await bot.telegram.sendPhoto(adminGroupId, photoFileId, {
-            caption: `Payment proof from user: ${ctx.from.username || ctx.from.first_name} (ID: ${userId})`,
-        });
-
-        // Send confirmation message to the user
-        await ctx.reply('✅ Payment proof received. Please wait for your payment confirmation.');
-    } catch (error) {
-        console.error('Failed to forward payment proof:', error);
-
-        // Notify the user if something went wrong
-        await ctx.reply('❌ Failed to process payment proof. Please try again later.');
+        await ctx.reply('Payment verified. User is now premium.');
+        await bot.telegram.sendMessage(userId, 'Thank you for purchasing premium!');
+    } else {
+        await ctx.reply('User not found in the database.');
     }
 });
 
